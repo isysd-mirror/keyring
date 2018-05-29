@@ -1,7 +1,7 @@
 {
   "name": "keyring-pgp",
-  "main": "./plugin.js",
-  "version": "0.2.0",
+  "main": "./keyring.js",
+  "version": "0.3.0",
   "description": "PGP implementation for the keyring-interface.",
   "repository": "https://github.com/isysd/keyring-pgp",
   "author": "isysd <public@iramiller.com>",
