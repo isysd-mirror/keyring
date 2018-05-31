@@ -48,7 +48,7 @@ async function isLocked (fpr) {
 }
 
 async function unlockKey (fpr, pass) {
-  if (await this.isLocked) return keyring.privateKeys.getForId(fpr).decrypt(pass)
+  if (await this.isLocked(fpr)) return keyring.privateKeys.getForId(fpr).decrypt(pass)
 }
 
 async function lockKey (fpr, pass) {
