@@ -1,90 +1,92 @@
 /* global describe:false it:false before:false */
 const assert = require('chai').assert
-const pgp = require('./keyring.js')
-const fs = require('fs')
-const pubkey = fs.readFileSync('fixtures/pubkey.asc', 'ascii').trim()
-const privkey = fs.readFileSync('fixtures/privkey.asc', 'ascii').trim()
-const fpr = 'cff501437e131fdb6c2ca2fd2bf7f4af45851864'
-describe('PGPKeyring', function () {
-  before(() => {
-    pgp.clear()
+const gpg = require('./keyring.js')
+const pify = require('pify')
+const path = require('path')
+const nfs = require('fs')
+const fs = pify(nfs)
+const pubkey = nfs.readFileSync('fixtures/pubkey.asc', 'ascii').trim()
+const privkey = nfs.readFileSync('fixtures/privkey.asc', 'ascii').trim()
+const fpr = 'B92828C1D851FF85EA643D10BD00ACBCA6123BCB'
+
+describe('GPGKeyring', function () {
+  before(async () => {
+    await gpg.clear()
+    await fs.writeFile(path.join(process.env.GNUPGHOME, 'gpg-agent.conf'), 'default-cache-ttl 3600\n')
   })
-  //  it('generate', async () => {
-  //    this.key = await pgp.generate({
-  //      numBits: 4096,
-  //      passphrase: 'password',
-  //      userIds: [{
-  //        name: 'testuser',
-  //        email: 'testuser@guld.io'
-  //      }]
-  //    })
-  //    assert.exists(this.key)
-  //    assert.exists(this.key.primaryKey)
-  //    assert.isTrue(this.key.primaryKey.isDecrypted)
-  //  }).timeout(10000)
+  after(async () => {
+    await gpg.clear()
+    await gpg.lockKey(fpr)
+  })
+  it('generate', async () => {
+    this.fpr = await gpg.generate({
+      passphrase: 'password',
+      numBits: 1024,
+      userIds: [{
+        name: 'testu',
+        email: 'testu@guld.io'
+      }]
+    })
+    assert.exists(this.fpr)
+    /*console.log(this.fpr)
+    pubkey = (await gpg.getPublicKey(this.fpr)).trim()
+    await fs.writeFile('fixtures/pubkey.asc')
+    privkey = (await gpg.getPrivateKey(this.fpr)).trim()
+    await fs.writeFile('fixtures/privkey.asc')*/
+  }).timeout(10000)
   it('importPublicKey', async () => {
-    await pgp.importPublicKey(pubkey)
+    await gpg.importPublicKey(pubkey)
+    assert.isTrue(true)
   })
   it('getPublicKey', async () => {
-    this.pubkey = await pgp.getPublicKey(fpr)
-    assert.equal(this.pubkey, pubkey)
+    this.pubkey = await gpg.getPublicKey(fpr)
+    assert.equal(this.pubkey.trim(), pubkey)
   })
   it('listKeys', async () => {
-    assert((await pgp.listKeys()).length === 1)
+    assert((await gpg.listKeys()).length === 2)
   })
   it('importPrivateKey', async () => {
-    await pgp.importPrivateKey(privkey)
-    this.privkey = await pgp.getPrivateKey(fpr)
-    assert.equal(this.privkey, privkey)
-  })
+    await gpg.importPrivateKey(privkey, 'password')
+    this.privkey = await gpg.getPrivateKey(fpr, 'password')
+    assert.exists(this.privkey.match('-----BEGIN PGP PRIVATE KEY BLOCK-----'))
+  }).timeout(10000)
   it('isLocked', async () => {
-    var islocked = await pgp.isLocked(fpr)
+    var islocked = await gpg.isLocked(fpr)
+    assert.isNotTrue(islocked)
+  }).timeout(15000)
+  /*it('lock', async () => {
+    await gpg.lockKey(fpr, 'password')
+    var islocked = await gpg.isLocked(fpr)
     assert.isTrue(islocked)
-  })
+  })*/
   it('unlock', async () => {
-    await pgp.unlockKey(fpr, 'password')
-    var islocked = await pgp.isLocked(fpr)
+    await gpg.unlockKey(fpr, 'password')
+    var islocked = await gpg.isLocked(fpr)
     assert.exists(islocked)
     assert.isNotTrue(islocked)
-  })
-  it('lock', async () => {
-    await pgp.lockKey(fpr, 'password')
-    var islocked = await pgp.isLocked(fpr)
-    assert.isTrue(islocked)
-  })
-  it('lock already locked', async () => {
-    await pgp.lockKey(fpr, 'password')
-    var islocked = await pgp.isLocked(fpr)
-    assert.isTrue(islocked)
-  })
-  it('unlock already unlocked', async () => {
-    await pgp.unlockKey(fpr, 'password')
-    var islocked = await pgp.isLocked(fpr)
-    assert.exists(islocked)
-    assert.isNotTrue(islocked)
-  })
+  }).timeout(15000)
   it('sign', async () => {
-    this.sig = await pgp.sign('hello', fpr, 'password')
+    this.sig = await gpg.sign('hello', fpr)
     assert.exists(this.sig)
     assert.equal(typeof this.sig, 'string')
   }).timeout(3000)
   it('verify bad signature', async () => {
-    var verified = await pgp.verify('hell', this.sig, fpr)
+    var verified = await gpg.verify('hell', this.sig, fpr)
     assert.exists(verified)
     assert.isFalse(verified)
   })
   it('verify good signature', async () => {
-    var verified = await pgp.verify('hello', this.sig, fpr, 'password')
+    var verified = await gpg.verify('hello', this.sig, fpr)
     assert.exists(verified)
     assert.isTrue(verified)
   })
   it('encrypt', async () => {
-    this.ciphertext = await pgp.encrypt('hello', fpr, 'password')
+    this.ciphertext = await gpg.encrypt('hello', fpr)
     assert.exists(this.ciphertext)
     assert.equal(typeof this.ciphertext, 'string')
   }).timeout(3000)
   it('decrypt', async () => {
-    var message = await pgp.decrypt(this.ciphertext, fpr, 'password')
+    var message = await gpg.decrypt(this.ciphertext, fpr)
     assert.exists(message)
     assert.equal(message, 'hello')
   })

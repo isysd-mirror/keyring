@@ -1,23 +1,21 @@
 {
-  "name": "keyring-pgp",
+  "name": "keyring-gpg",
   "main": "./keyring.js",
-  "version": "0.3.0",
-  "description": "PGP implementation for the keyring-interface.",
-  "repository": "https://github.com/isysd/keyring-pgp",
+  "version": "0.1.0",
+  "description": "GPG2 implementation for the keyring-interface.",
+  "repository": "https://github.com/isysd/keyring-gpg",
   "author": "isysd <public@iramiller.com>",
   "license": "MIT",
   "scripts": {
-    "test": "./node_modules/.bin/istanbul cover ./node_modules/mocha/bin/_mocha --report lcovonly -- -R spec && cat ./coverage/lcov.info | ./node_modules/coveralls/bin/coveralls.js && rm -rf ./coverage",
+    "test": "GNUPGHOME=.gnupg ./node_modules/mocha/bin/_mocha",
     "lint": "eslint --env browser *.js*",
     "fix": "eslint --fix *.js*"
   },
   "dependencies": {
-    "eol": "^0.9.1",
-    "openpgp": "^3.0.11"
+    "rimraf": "^2.6.2"
   },
   "devDependencies": {
     "chai": "^4.1.2",
-    "coveralls": "^3.0.1",
     "eslint": "^4.19.1",
     "eslint-config-standard": "^11.0.0",
     "eslint-plugin-es5": "^1.3.1",
@@ -26,7 +24,6 @@
     "eslint-plugin-node": "^6.0.1",
     "eslint-plugin-promise": "^3.7.0",
     "eslint-plugin-standard": "^3.1.0",
-    "istanbul": "^v1.1.0-alpha.1",
     "mocha": "^5.2.0",
     "pre-commit": "^1.2.2"
   },
