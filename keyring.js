@@ -160,7 +160,7 @@ async function sign (message, fpr) {
 
 async function verify (message, signature, signers) {
   if (!Array.isArray(signers)) signers = [signers]
-  tmpfile = path.join(tmpdir(), `${Date.now()}.sig`)
+  var tmpfile = path.join(tmpdir(), `${Date.now()}.sig`)
   await fs.writeFile(tmpfile, signature)
   var res = await scall('gpg2', message, mergeOpts(['--status-fd=1', '--verify', tmpfile, '-']), true)
   await fs.unlink(tmpfile)
@@ -169,7 +169,7 @@ async function verify (message, signature, signers) {
   var sigqual
   var validsig
   res = res.split('\n')
-  for (line in res) {
+  for (var line in res) {
     if (res[line].startsWith('[GNUPG:] NEWSIG')) {
       active = undefined
       sigqual = undefined
