@@ -1,17 +1,18 @@
 {
   "name": "keyring-gpg",
   "main": "./keyring.js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "GPG2 implementation for the keyring-interface.",
   "repository": "https://github.com/isysd/keyring-gpg",
   "author": "isysd <public@iramiller.com>",
   "license": "MIT",
   "scripts": {
-    "test": "GNUPGHOME=.gnupg ./node_modules/mocha/bin/_mocha",
+    "test": "./node_modules/.bin/rimraf .gnupg && ./node_modules/.bin/rimraf .gnupg.bak &&  GNUPGHOME=.gnupg ./node_modules/mocha/bin/_mocha",
     "lint": "eslint --env browser *.js*",
     "fix": "eslint --fix *.js*"
   },
   "dependencies": {
+    "gpg-conf": "^0.2.0",
     "rimraf": "^2.6.2"
   },
   "devDependencies": {
