@@ -199,11 +199,11 @@ async function encryptFile (i, fpr) {
 }
 
 async function decryptToFile (message, i) {
-  return spawn('gpg2', message, ['-o', i, '-d'])
+  return spawn('gpg2', message, ['--batch', '--yes', '-o', i, '-d'])
 }
 
 async function encryptToFile (message, i, fpr) {
-  return spawn('gpg2', message, ['-o', i, '-a', '-e', '-r', fpr])
+  return spawn('gpg2', message, ['--batch', '--yes', '-o', i, '-a', '-e', '-r', fpr])
 }
 
 async function decryptFileToFile (i, o) {
