@@ -67,7 +67,7 @@ async function listKeys (fpr) {
       var fpr2 = da[l].match(/[A-Z0-9]{40}/g)[0]
       var uid = da[l].match(/[A-Z0-9]{40}::[^:]+/)[0].split(':')
       if (uid) keys[fpr2] = uid.slice(-1)[0]
-      else keys[fpr2] = keys[fpr2]
+      // else keys[fpr2] = keys[fpr2]
     }
   }
   return keys
@@ -85,7 +85,7 @@ async function listSecretKeys (term) {
       var fpr = da[l].match(/[A-Z0-9]{40}/g)[0]
       var uid = da[l].match(/[A-Z0-9]{40}::[^:]+/)[0].split(':')
       if (uid) keys[fpr] = uid.slice(-1)[0]
-      else keys[fpr] = keys[fpr]
+      // else keys[fpr] = keys[fpr]
     }
   }
   return keys

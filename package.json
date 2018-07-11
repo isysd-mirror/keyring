@@ -1,7 +1,7 @@
 {
   "name": "keyring-gpg",
   "main": "./keyring.js",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "GPG2 implementation for the keyring-interface.",
   "repository": "https://github.com/isysd/keyring-gpg",
   "author": "isysd <public@iramiller.com>",
@@ -12,8 +12,8 @@
     "fix": "eslint --fix *.js*"
   },
   "dependencies": {
-    "gpg-conf": "^0.4.2",
-    "guld-spawn": "^1.0.0",
+    "gpg-conf": "^0.4.5",
+    "guld-spawn": "^1.0.4",
     "rimraf": "^2.6.2",
     "spawn-please": "^0.3.0"
   },
