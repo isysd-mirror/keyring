@@ -4,7 +4,8 @@ const fs = pify(require('fs'))
 const fpre = /[A-Z0-9]{40}/gm
 const { homedir, tmpdir } = require('os')
 const path = require('path')
-const spawn = require('guld-spawn')
+const { getSpawn } = require('guld-spawn')
+const spawn = getSpawn()
 // set GNUPGHOME to default if it isn't already
 if (!process.env.hasOwnProperty('GNUPGHOME')) process.env.GNUPGHOME = path.join(homedir(), '.gnupg')
 
