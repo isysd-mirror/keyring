@@ -1,21 +1,21 @@
 {
   "name": "keyring-gpg",
-  "main": "./keyring.js",
-  "version": "0.3.5",
+  "main": "./index.js",
+  "version": "0.3.6",
   "description": "GPG2 implementation for the keyring-interface.",
-  "repository": "https://github.com/isysd/keyring-gpg",
+  "repository": "https://bitbucket.org/guld/tech-js-node_modules-keyring-gpg",
   "author": "isysd <public@iramiller.com>",
   "license": "MIT",
   "scripts": {
     "test": "./node_modules/.bin/rimraf .gnupg && ./node_modules/.bin/rimraf .gnupg.bak &&  GNUPGHOME=.gnupg ./node_modules/mocha/bin/_mocha",
     "lint": "eslint --env browser *.js*",
-    "fix": "eslint --fix *.js*"
+    "fix": "eslint --fix *.js*",
+    "test:lint": "npm run lint && npm run test"
   },
   "dependencies": {
     "gpg-conf": "^0.4.5",
     "guld-spawn": "^2.0.2",
-    "rimraf": "^2.6.2",
-    "spawn-please": "^0.3.0"
+    "rimraf": "^2.6.2"
   },
   "devDependencies": {
     "chai": "^4.1.2",
@@ -38,8 +38,9 @@
   "engines": {
     "node": ">=7"
   },
-  "homepage": "https://github.com/isysd/tech-js-node_modules-keyring-gpg#readme",
+  "homepage": "https://guld.tech/lib/keyring-gpg.html",
   "keywords": [
-    "guld"
+    "guld",
+    "node"
   ]
 }

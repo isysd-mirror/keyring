@@ -1,18 +1,26 @@
 {
-    "extends": [
-        "eslint:recommended",
-        "standard",
-        "plugin:es5/no-es2016"
+  "extends": [
+    "eslint:recommended",
+    "standard",
+    "plugin:es5/no-es2016"
+  ],
+  "plugins": [
+    "json"
+  ],
+  "rules": {
+    "linebreak-style": [
+      "error",
+      "unix"
     ],
-    "plugins": [
-        "json"
+    "camelcase": [
+      "error",
+      {
+        "properties": "always"
+      }
     ],
-    "rules": {
-        "linebreak-style": ["error", "unix"],
-        "camelcase": ["error", {"properties": "always"}],
-        "prefer-template": "error"
-    },
-    "globals": {
-        "chrome": false
-    }
+    "prefer-template": "error"
+  },
+  "globals": {
+    "chrome": false
+  }
 }

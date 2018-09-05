@@ -1,6 +1,6 @@
 /* global describe:false it:false before:false after:false */
 const assert = require('chai').assert
-const gpg = require('./keyring.js')
+const gpg = require('../')
 const { setAgentCache } = require('gpg-conf')
 // const pify = require('pify')
 // const path = require('path')
