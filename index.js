@@ -151,16 +151,17 @@ async function sign (message, fpr) {
   return spawn('gpg2', message, ['--detach-sign', '-a', '-u', fpr])
 }
 
-async function verify (message, signature, signers) {
+async function verifyWeight (message, signature, signers, weights) {
   if (!Array.isArray(signers)) signers = [signers]
+  if (!weights) weights = new Array().fill(1, 0, signers.length)
   var tmpfile = path.join(tmpdir(), `${Date.now()}.sig`)
   await fs.writeFile(tmpfile, signature)
   var res = await spawn('gpg2', message, ['--status-fd=1', '--verify', tmpfile, '-'], true)
-  await fs.unlink(tmpfile)
-  // TODO check response against signers
+  await fs.unlink(tmpfile).catch(e => {})
   var active
   var sigqual
   var validsig
+  var votes = 0
   res = res.split('\n')
   for (var line in res) {
     if (res[line].startsWith('[GNUPG:] NEWSIG')) {
@@ -177,10 +178,22 @@ async function verify (message, signature, signers) {
     // TODO other sig qualities to allow? configurable?
     if (active && validsig && sigqual && sigqual === 'good') {
       var si = signers.indexOf(active)
-      if (si !== -1) signers.splice(si, 1)
+      if (si !== -1) {
+        signers.splice(si, 1)
+        if (weights && weights.length >= si - 1) {
+          votes = votes + weights[si]
+          weights.splice(si, 1)
+        }
+      }
     }
   }
-  return signers.length === 0
+  return votes
+}
+
+async function verify (message, signature, signers) {
+  var weights = verifyWeight(message, signature, signers)
+  if (weights === signers.length) return true
+  else return false
 }
 
 async function decrypt (message) {
@@ -230,6 +243,7 @@ module.exports = {
   lockKey: lockKey,
   sign: sign,
   verify: verify,
+  verifyWeight: verifyWeight,
   decrypt: decrypt,
   encrypt: encrypt,
   decryptFile: decryptFile,
