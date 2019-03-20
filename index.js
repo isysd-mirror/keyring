@@ -151,9 +151,9 @@ async function sign (message, fpr) {
   return spawn('gpg2', message, ['--detach-sign', '-a', '-u', fpr])
 }
 
-async function verifyWeight (message, signature, signers, weights) {
-  if (!Array.isArray(signers)) signers = [signers]
-  if (!weights) weights = new Array().fill(1, 0, signers.length)
+async function verifyWeight (message, signature, signers, weights = []) {
+  if (typeof signers === 'string') signers = [signers]
+  if (weights.length === 0) weights = weights.fill(1, 0, signers.length)
   var tmpfile = path.join(tmpdir(), `${Date.now()}.sig`)
   await fs.writeFile(tmpfile, signature)
   var res = await spawn('gpg2', message, ['--status-fd=1', '--verify', tmpfile, '-'], true)
@@ -181,7 +181,8 @@ async function verifyWeight (message, signature, signers, weights) {
       if (si !== -1) {
         signers.splice(si, 1)
         if (weights && weights.length >= si - 1) {
-          votes = votes + weights[si]
+          var w = weights[si] || 1
+          votes = votes + w
           weights.splice(si, 1)
         }
       }
@@ -191,8 +192,10 @@ async function verifyWeight (message, signature, signers, weights) {
 }
 
 async function verify (message, signature, signers) {
-  var weights = verifyWeight(message, signature, signers)
-  if (weights === signers.length) return true
+  if (typeof signers === 'string') signers = [signers]
+  var slen = signers.length
+  var votes = await verifyWeight(message, signature, signers)
+  if (votes === slen) return true
   else return false
 }
 
