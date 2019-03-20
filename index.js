@@ -5,6 +5,7 @@ const fpre = /[A-Z0-9]{40}/gm
 const { homedir, tmpdir } = require('os')
 const path = require('path')
 const { getSpawn } = require('guld-spawn')
+const { getRandStr } = require('guld-random')
 const spawn = getSpawn()
 // set GNUPGHOME to default if it isn't already
 if (!process.env.hasOwnProperty('GNUPGHOME')) process.env.GNUPGHOME = path.join(homedir(), '.gnupg')
@@ -153,15 +154,22 @@ async function sign (message, fpr) {
 
 async function verifyWeight (message, signature, signers, weights = []) {
   if (typeof signers === 'string') signers = [signers]
-  if (weights.length === 0) weights = weights.fill(1, 0, signers.length)
-  var tmpfile = path.join(tmpdir(), `${Date.now()}.sig`)
+  if (!weights || weights.length === 0) {
+    weights = []
+    signers.forEach(s => {
+      weights.push(1)
+    })
+  }
+  if (typeof signature === 'undefined' || typeof message === 'undefined') throw new Error(`message and/or signature are blank`)
+  var rnd = await getRandStr(8)
+  var tmpfile = path.join(tmpdir(), `${Date.now()}${rnd}.sig`)
   await fs.writeFile(tmpfile, signature)
   var res = await spawn('gpg2', message, ['--status-fd=1', '--verify', tmpfile, '-'], true)
-  await fs.unlink(tmpfile).catch(e => {})
   var active
   var sigqual
   var validsig
   var votes = 0
+  res = res.replace(/\n$/, '')
   res = res.split('\n')
   for (var line in res) {
     if (res[line].startsWith('[GNUPG:] NEWSIG')) {
@@ -181,20 +189,20 @@ async function verifyWeight (message, signature, signers, weights = []) {
       if (si !== -1) {
         signers.splice(si, 1)
         if (weights && weights.length >= si - 1) {
-          var w = weights[si] || 1
-          votes = votes + w
+          votes = votes + weights[si]
           weights.splice(si, 1)
         }
       }
     }
   }
+  await fs.unlink(tmpfile).catch(e => {})
   return votes
 }
 
 async function verify (message, signature, signers) {
   if (typeof signers === 'string') signers = [signers]
   var slen = signers.length
-  var votes = await verifyWeight(message, signature, signers)
+  var votes = await verifyWeight(message, signature, signers.slice())
   if (votes === slen) return true
   else return false
 }
