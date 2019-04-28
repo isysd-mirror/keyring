@@ -1,7 +1,7 @@
 {
   "name": "keyring-gpg",
   "main": "./index.js",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "GPG2 implementation for the keyring-interface.",
   "repository": "https://bitbucket.org/guld/tech-js-node_modules-keyring-gpg",
   "author": "isysd <public@iramiller.com>",
@@ -31,10 +31,6 @@
     "mocha": "^5.2.0",
     "pre-commit": "^1.2.2"
   },
-  "pre-commit": [
-    "lint",
-    "test"
-  ],
   "readme": "README.md",
   "engines": {
     "node": ">=7"
