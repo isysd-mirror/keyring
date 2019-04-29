@@ -3,9 +3,11 @@ import { finishTest } from '../../../iso-test/index.js'
 import { expandConfig, flattenConfig, createGnuPGConfig } from '../../gnupg/config.js'
 import { path } from '../../../path/path.js'
 import fs from '../../../fs/fs.js'
+import { setup } from './setup.js'
+import { cleanup } from './cleanup.js'
+setup()
 // this is relative to keyring project root, not module directory
 // no __dirname available in es6!
-process.env.GNUPGHOME = path.resolve('./fixtures')
 const GnuPGConfig = createGnuPGConfig()
 var gnuPGConfig = new GnuPGConfig()
 var confile
@@ -22,14 +24,23 @@ new Promise(async (resolve, reject) => {
   conf = expandConfig(confile.split('\n'))
   assert(conf)
   assert(conf['no-greeting'])
+  finishTest('pass no-greeting')
   assert(conf['no-auto-key-locate'])
+  finishTest('pass no-auto-key-locate')
   assert(conf['no-auto-key-locate'].comments === '# Don\'t leak information by automatically trying to get keys.\n')
+  finishTest('pass no-auto-key-locate comments')
   assert(JSON.stringify(['S9', 'S8', 'S7', 'S10', 'S4', 'S13', 'S12', 'S11']) === JSON.stringify(conf['personal-cipher-preferences'].args))
+  finishTest('pass personal-cipher-preferences')
+
   flat = flattenConfig(conf)
   // used to generate the fixture
   // await gnuPGConfig.writeConfigFile(flat)
   assert(flat)
   assert.equal(confile.replace('\n', ''), flat.replace('\n', ''))
+  finishTest('pass flat config')
+
+  cleanup()
+  finishTest('kill')
 
   // legacy test code never been enabled
   /*
@@ -45,5 +56,6 @@ new Promise(async (resolve, reject) => {
   */
 }).catch(e => {
   console.error(e)
+  cleanup()
   finishTest(e)
 })

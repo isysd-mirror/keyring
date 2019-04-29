@@ -1,3 +1,4 @@
+import { TRUST_LEVEL_ARRAY } from '../keyring.js'
 
 export function noop (r, enc, cb) {
   r = r.toString(this.encoding || 'utf-8')
@@ -60,10 +61,45 @@ export function keyTrustedReducer (chunk, enc, cb) {
   cb()
 }
 
+export function verifySigReducer (chunk, enc, cb) {
+  var matched
+  var self = this
+  self.strcache = self.strcache && self.strcache.length > 0 ? self.strcache : ''
+  self.sig = {}
+  if (enc !== 'utf-8') chunk = chunk.toString('utf-8')
+  var siga = `${self.strcache}\n${chunk}`.replace('\n\n', '\n').split('\n')
+  var s
+  while (s = siga.shift()) {
+    if (s.length === 0 || s === '[GNUPG:] NEWSIG') continue
+    // else if (s.startsWith('[GNUPG:] KEY_CONSIDERED ')) sig.keys_considered = s.slice(24, s.length-3)
+    else if (s.startsWith('[GNUPG:] VALIDSIG ')) {
+      self.sig.sigkey = s.slice(18, 58)
+      self.sig.key = s.slice(s.length - 40)
+      self.sig.timestamp = parseInt(s.slice(70).match(/^[0-9]*/)[0])
+    } else if (s.startsWith('[GNUPG:] GOODSIG ')) {
+      self.sig.good = s.slice(17).match(/^[A-F0-9]{16,40}/)[0]
+      self.sig.uid = s.slice(17 + self.sig.good.length + 1).trim(' ')
+    } else if (s.startsWith('[GNUPG:] TRUST_')) {
+      self.sig.trust = TRUST_LEVEL_ARRAY.indexOf(s.slice(15).match(/[A-Z]*/)[0].toLowerCase()) + 1
+    }
+  }
+  if (chunk.join) chunk = chunk.join('\n')
+  if (self.sig.hasOwnProperty('trust') && self.sig.trust >= 0 && self.sig.sigkey && self.sig.key && self.sig.timestamp && self.sig.good && self.sig.uid) {
+    self.push([self.sig.sigkey, self.sig.key, self.sig.timestamp, self.sig.trust, self.sig.uid].join(' '))
+    //process.stdout.write(self.strcache + "\n" + chunk + "\n")
+    self.strcache = ''
+    self.sig = {}
+  } else {
+    self.strcache = `${self.strcache}${chunk}`.replace('\n\n', '\n')
+  }
+  cb()
+}
+
 export default {
   noop,
   fprUidReducer,
   colonListReducer,
   secretKeyImportReducer,
-  keyTrustedReducer
+  keyTrustedReducer,
+  verifySigReducer
 }

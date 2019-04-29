@@ -7,10 +7,9 @@
   "author": "isysd <public@iramiller.com>",
   "license": "MIT",
   "scripts": {
-    "test": "./node_modules/.bin/rimraf .gnupg && ./node_modules/.bin/rimraf .gnupg.bak &&  GNUPGHOME=.gnupg ./node_modules/mocha/bin/_mocha",
-    "lint": "eslint --env browser *.js*",
-    "fix": "eslint --fix *.js*",
-    "test:lint": "npm run lint && npm run test"
+    "test": "node -e \"require = require('../esm/esm.js')(module); try {require('./test/gnupg/cleanup.js').default()}catch(e){}\" && node -r esm ./test/gnupg/gnupg.js && node -r esm ./test/gnupg/executables.js && node -r esm ./test/gnupg/config.js && node -r esm ./test/gnupg/commands.js && node -r esm ./test/gnupg/agent.js && node -r esm ./test/gnupg/keyring.js",
+    "preinstall": "gpm -n .. -t .. -u https -i .",
+    "postinstall": "node -e \"try { require('../esm/esm.js')(module); } catch (e) {require('child_process').execSync('npm i', {cwd: require('path').join('..', 'esm')})}\""
   },
   "dependencies": {
     "gpg-conf": "^0.4.6",

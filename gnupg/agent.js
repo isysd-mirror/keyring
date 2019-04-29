@@ -3,11 +3,11 @@ import { Process } from '../../process/process.js'
 import child_process from '../../child_process/child_process.js'
 import fs from '../../fs/fs.js'
 import path from '../../path/path.js'
-import { createGnuPG } from './gnupg.js'
+import { createGnuPGConfig } from './config.js'
 import { senseGpgAgentExec } from './executables.js'
 global.process = Process.getProcess()
 
-export class GnuPGAgent extends createGnuPG() {
+export class GnuPGAgent extends createGnuPGConfig() {
   async init () {
     process.env.GNUPG_AGENT_EXEC = await senseGpgAgentExec().catch(e => undefined)
   }
@@ -26,14 +26,8 @@ export class GnuPGAgent extends createGnuPG() {
     }
   }
 
-  async setAgentCache (seconds) {
-    var body
-    if (seconds) {
-      body = `default-cache-ttl ${seconds}\n`
-    } else {
-      body = ''
-    }
-    await fs.promises.writeFile(path.join(this.home, 'gpg-agent.conf'), body)
+  async setAgentCache (seconds = 0) {
+    await this.setConfig('default-cache-ttl', [seconds], '', 'gpg-agent.conf')
   }
 
   /*

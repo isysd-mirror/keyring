@@ -10,16 +10,21 @@ global.process = Process.getProcess()
  */
 export async function senseGpgExec () {
   // look for process.env.GNUPG_EXEC
-  if (process.env.GNUPG_EXEC) return process.env.GNUPG_EXEC
+  if (process.env.GNUPG_EXEC && ['null', 'undefined'].indexOf(process.env.GNUPG_EXEC) === -1) return process.env.GNUPG_EXEC
   else {
+    process.env.GNUPG_EXEC = undefined
     // try to spawn gpg2
-    process.env.GNUPG_EXEC = process.env.GNUPG_EXEC || await child_process.spawn('gpg2', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg2' : undefined).catch(e => undefined)
-    // try to spawn gpg
-    process.env.GNUPG_EXEC = process.env.GNUPG_EXEC || await child_process.spawn('gpg', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg' : undefined).catch(e => undefined)
-    // try git config gpg.program
-    process.env.GNUPG_EXEC = process.env.GNUPG_EXEC || await child_process.spawn('git', ['--config', 'gpg.program']).promisify().then(d => d && d.length > 0 ? d.replace(/[\n\r]*$/, '') : undefined).catch(e => undefined)
-    // return if set...
+    process.env.GNUPG_EXEC = await child_process.spawn('gpg2', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg2' : undefined).catch(e => undefined)
     if (process.env.GNUPG_EXEC) return process.env.GNUPG_EXEC
+
+    // try to spawn gpg
+    process.env.GNUPG_EXEC = await child_process.spawn('gpg', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg' : undefined).catch(e => undefined)
+    if (process.env.GNUPG_EXEC) return process.env.GNUPG_EXEC
+
+    // try git config gpg.program
+    process.env.GNUPG_EXEC = await child_process.spawn('git', ['--config', 'gpg.program']).promisify().then(d => d && d.length > 0 ? d.replace(/[\n\r]*$/, '') : undefined).catch(e => undefined)
+    if (process.env.GNUPG_EXEC) return process.env.GNUPG_EXEC
+
     // try to guess path based on platform
     if (process.platform === 'win32') {
       var pathroot = path.win32.parse(path.win32.normalize('file.ext')).root
@@ -85,11 +90,10 @@ export async function senseGpgExec () {
 
 export async function senseGpgAgentExec () {
   // look for process.env.GNUPG_AGENT_EXEC
-  if (process.env.GNUPG_AGENT_EXEC) return process.env.GNUPG_AGENT_EXEC
+  if (process.env.GNUPG_AGENT_EXEC && ['null', 'undefined'].indexOf(process.env.GNUPG_AGENT_EXEC) === -1) return process.env.GNUPG_AGENT_EXEC
   else {
     // try to spawn gpg-connect-agent
-    process.env.GNUPG_AGENT_EXEC = process.env.GNUPG_AGENT_EXEC || await child_process.spawn('gpg-connect-agent', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg-connect-agent' : undefined).catch(e => undefined)
-    // return if set...
+    process.env.GNUPG_AGENT_EXEC = await child_process.spawn('gpg-connect-agent', ['--version']).promisify().then(d => d && d.length > 0 ? 'gpg-connect-agent' : undefined).catch(e => undefined)
     if (process.env.GNUPG_AGENT_EXEC) return process.env.GNUPG_AGENT_EXEC
     // try to guess path based on platform
     if (process.platform === 'win32') {

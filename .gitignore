@@ -62,3 +62,6 @@ typings/
 openpgp.store/
 .gnupg*
 package-lock.json
+
+test/gnupg/home
+LICENSE.*

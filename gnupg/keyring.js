@@ -5,15 +5,14 @@ import fs from '../../fs/fs.js'
 import { tmpdir, hostname } from '../../os/os.js'
 import global from '../../global/global.js'
 import { Process } from '../../process/process.js'
-import { Transform } from '../../stream/stream.js'
+import { Transform, Readable } from '../../stream/stream.js'
 import child_process from '../../child_process/child_process.js'
-import { getRandStr, getRandTimestamp } from '../../random/random.js'
+import { randStr, randTimestamp } from '../../random/random.js'
 import { Keyring, keyIdRe } from '../keyring.js'
-import { secretKeyImportReducer, fprUidReducer, colonListReducer, keyTrustedReducer } from './reducers.js'
+import { secretKeyImportReducer, fprUidReducer, colonListReducer, keyTrustedReducer, verifySigReducer } from './reducers.js'
 import { senseGpgExec } from './executables.js'
-//import { createGnuPG } from './gnupg.js'
-import { createGnuPGConfig } from './config.js'
-import { setCommandArgs, gpgKeygenStream } from './commands.js'
+// import { createGnuPG } from './gnupg.js'
+import config from './config.js'
 global.process = Process.getProcess()
 
 /*
@@ -33,8 +32,26 @@ const COMMAND_ARGS = {
   'export-secret': ['--export-secret-keys'],
   'delete': ['--delete-keys'],
   'delete-secret': ['--delete-secret-and-public-key'],
-  'generate': ['--generate-key']
+  'generate': ['--generate-key'],
+  'edit-key': ['--command-fd=0', '--no-tty', '--edit-key'],
+  'sign-key': ['--sign-key']
 }
+
+const OUT_FILE_COMMANDS = [
+  'encrypt',
+  'decrypt',
+  'sign',
+  'detach-sign',
+  'export',
+  'export-secret'
+]
+
+const IN_FILE_COMMANDS = [
+  'decrypt',
+  'import',
+  'import-secret'
+]
+
 
 export function setCommandArgs (options, args) {
   if (options.command) {
@@ -92,6 +109,14 @@ export function setCommandArgs (options, args) {
         setBatchArgs(options, args)
         setPassArgs(options, args)
         break
+      case 'edit-key':
+        setBatchArgs(options, args)
+        setKeyArgs(options, args)
+        break
+      case 'sign-key':
+        setBatchArgs(options, args)
+        setKeyArgs(options, args)
+        break
       case 'sign':
       default:
         setArmorArgs(options, args)
@@ -100,7 +125,7 @@ export function setCommandArgs (options, args) {
         setFileArgs(options, args)
         setKeyArgs(options, args)
         if (options.clear === false || options.detach) {
-          if (args.indexOf('--detach-sign') === -1) args.push('--detach-sign')
+          if (args.indexOf('--detach-sign') === -1) args[args.indexOf('--clear-sign')] = '--detach-sign'
         }
         break
     }
@@ -109,17 +134,28 @@ export function setCommandArgs (options, args) {
 
 function setFileArgs (options, args) {
   if (options.outfile) {
-    if (options.command.endsWith('crypt') && args.indexOf('-o') === -1) {
-      args.push('-o')
-      args.push(options.outfile)
-    }
+    args.unshift(options.outfile)
+  } else if (options.command === 'verify') {
+    args.unshift('--status-fd=1')
   }
-  if (options.infile) {
-    if (!options.command.endsWith('crypt') && args.indexOf('-i') === -1) {
-      args.push('-i')
-      args.push(options.infile)
-    }
+  if (OUT_FILE_COMMANDS.indexOf(options.command) !== -1 && args.indexOf('-o') === -1) {
+    if (typeof(options.outfile) === 'undefined') args.unshift('-')
+    args.unshift('-o')
   }
+  if (options.infile && IN_FILE_COMMANDS.indexOf(options.command) !== -1 && args.indexOf('-i') === -1) {
+    args.unshift(options.infile)
+    args.unshift('-i')
+  } else if (options.infile && args.indexOf(options.infile) === -1) {
+    args.push(options.infile)
+  } else if (options.command === 'verify' && options.detach) {
+    args.push('-')
+  }
+  if (options.infile2) {
+    args.push(options.infile2)
+  } else if (options.command === 'verify' && options.detach) {
+    args.push('-')
+  }
+
 }
 
 function setKeyArgs (options, args) {
@@ -145,14 +181,14 @@ function setArmorArgs (options, args) {
 }
 
 function setBatchArgs (options, args) {
-  if (options.yes || options.command === 'generate' || options.command.startsWith('delete') || options.password || options.batch) {
+  if (options.yes || options.command === 'generate'  || options.command === 'sign-key' || options.command.startsWith('delete') || options.password || options.batch) {
     if (args.indexOf('--batch') === -1) args.unshift('--batch')
     if (args.indexOf('--yes') === -1) args.unshift('--yes')
   }
 }
 
 function setPassArgs (options, args) {
-  options.password = options.password || options.passphrase
+  options.password = options.password || options['Passphrase']
   if (options.password) {
     setBatchArgs(options, args)
     if (args.indexOf('--passphrase') === -1) args.push('--passphrase')
@@ -164,10 +200,14 @@ function setPassArgs (options, args) {
  * Main Keyring class extends GnuPG, GnuPGConfig, Keyring
  */
 
-export class GnuPGKeyring extends createGnuPGConfig(Keyring) {
+export class GnuPGKeyring extends config.createGnuPGConfig(Keyring) {
   constructor (options) {
     options = options || {}
     super(options)
+  }
+
+  static setCommandArgs (options, args) {
+    return setCommandArgs(options, args)
   }
 
   /*
@@ -186,72 +226,86 @@ export class GnuPGKeyring extends createGnuPGConfig(Keyring) {
 
   async init () {
     process.env.GNUPG_EXEC = await senseGpgExec()
-    // await this.getConfig()
-    await this.list({ keys: process.env.USER })
-    await fs.promises.mkdir(path.join(this.home, 'private-keys-v1.d'), 0o700).catch(e => {
+    await this.initConfig()
+    await this.list({ keys: process.env.USER }).catch(e => undefined)
+    await fs.promises.mkdir(path.join(this.home, 'private-keys-v1.d'), {
+      recursive: true,
+      mode: 0o700
+    }).catch(e => {
       if (e.toString().indexOf('EEXIST') === -1) throw e
     })
   }
 
-  keygenStream (options) {
-    options.stdin = new Readable()
+  stdinStream (options) {
+    options = options || {}
+    options.stdin = new Transform({ transform: function (chunk, enc, cb) {
+      this.push(chunk)
+      cb()
+    } })
     options.stdin.setEncoding('utf-8')
+  }
+
+  // editKeyStream () {}
+
+  keygenStream (options) {
+    this.stdinStream(options)
     // initialize async environment to push to options.stdin
     new Promise(async (resolve, reject) => {
-      options['Key-Type'] = options['Key-Type'] || 'eddsa'
+      var keygen = await this.getConfig('keygen.conf').catch(e => config.DEFAULTS['keygen.conf'])
+      options['Key-Type'] = options['Key-Type'] || keygen['Key-Type'].args[keygen['Key-Type'].args.length - 1]
 
       // default creation time is random time in last ~1 day
-      options.creation = options.creation || 'seconds=' + (await getRandTimestamp()).toString()
+      options['Creation-Date'] = options['Creation-Date'] || 'seconds=' + (await randTimestamp()).toString()
       // default expiration 10 years in the future
-      options.expire = options.expire || parseInt(options.creation.slice(7)) + 315360000
-      assert(ALLOWED_KEY_TYPES.indexOf(options['Key-Type']) !== -1)
+      options['Expire-Date'] = options['Expire-Date'] || parseInt(options['Creation-Date'].slice(7)) + 315360000
+      if (keygen && keygen['Key-Type']) assert(keygen['Key-Type'].args.indexOf(options['Key-Type']) !== -1)
 
-      switch (options.keyType.toLowerCase()) {
+      switch (options['Key-Type'].toLowerCase()) {
         case 'rsa':
-          options.numBits = options.numBits || 4096
+          options['Key-Length'] = options['Key-Length'] || keygen['Key-Length'].args[keygen['Key-Length'].args.length - 1]
           options.stdin.write(`Key-Type: RSA
-Key-Length: ${options.numBits}
+Key-Length: ${options['Key-Length']}
 Subkey-Type: RSA
-Subkey-Length: ${options.numBits}
+Subkey-Length: ${options['Key-Length']}
 `)
         case 'ecc':
         case 'eddsa':
         case 'ecdh':
         default:
-          options.keyCurve = options.keyCurve || 'Ed25519'
-          options.subkeyCurve = options.keyCurve === 'Ed25519' ? 'Curve25519' : options.keyCurve
+          options['Key-Curve'] = options['Key-Curve'] || keygen['Key-Curve'].args[keygen['Key-Curve'].args.length - 1]
+          options['Subkey-Curve'] = options['Key-Curve'] === 'Ed25519' ? 'Curve25519' : options['Key-Curve']
           options.stdin.write(`Key-Type: eddsa
-Key-Curve: ${options.keyCurve}
+Key-Curve: ${options['Key-Curve']}
 Key-Usage: sign
 Subkey-Type: ecdh
-Subkey-Curve: ${options.subkeyCurve}
+Subkey-Curve: ${options['Subkey-Curve']}
 Subkey-Usage: encrypt
 `)
           break
       }
-      if (options.expire) {
-        options.stdin.write(`Expire-Date: ${options.expire}
+      if (options['Expire-Date']) {
+        options.stdin.write(`Expire-Date: ${options['Expire-Date']}
 `)
       }
-      if (options.creation) {
-        options.stdin.write(`Creation-Date: ${options.creation}
+      if (options['Creation-Date']) {
+        options.stdin.write(`Creation-Date: ${options['Creation-Date']}
 `)
       }
-      options.user = options.user || process.env.USER
-      options.email = options.email || `${process.env.USER}@${hostname()}`
-      if (options.user) {
-        options.stdin.write(`Name-Real: ${options.user}
+      options['Name-Real'] = options['Name-Real'] || process.env.USER
+      options['Name-Email'] = options['Name-Email'] || `${process.env.USER}@${hostname()}`
+      if (options['Name-Real']) {
+        options.stdin.write(`Name-Real: ${options['Name-Real']}
 `)
       }
-      if (options.email) {
-        options.stdin.write(`Name-Email: ${options.email}
+      if (options['Name-Email']) {
+        options.stdin.write(`Name-Email: ${options['Name-Email']}
 `)
       }
-      options.password = options.password || options.passphrase
+      options.password = options.password || options['Passphrase']
       if (options.password) {
         options.stdin.write(`Passphrase: ${options.password}
 `)
-      } else if (options.transientKey) {
+      } else if (options['transient-key']) {
         options.stdin.write(`%no-protection
 %transient-key
 `)
@@ -280,17 +334,17 @@ Subkey-Usage: encrypt
   /*
    * Stream API
    */
-  _generate (options) {
+  generateStream (options) {
     var args = []
     options = options || {}
     options.command = 'generate'
-    options.stdin = options.stdin || gpgKeygenStream(options)
+    options.stdin = options.stdin || this.keygenStream(options)
     setCommandArgs(options, args)
     var p = this._gpg(args)
     options.stdin.pipe(p.stdin)
     p.stdout.setEncoding('utf-8')
     p.stderr.setEncoding('utf-8')
-    p.stdout.on('finish', () => {
+    p.stdout.on('close', () => {
       p.stderr.destroy()
     })
     return p.stderr
@@ -299,7 +353,7 @@ Subkey-Usage: encrypt
       }))
   }
 
-  _import (options) {
+  importStream (options) {
     assert(options.stdin.length >= 40 || options.filein.length >= 40)
     var args = []
     options.command = 'import'
@@ -318,7 +372,7 @@ Subkey-Usage: encrypt
     }
   }
 
-  _delete (options) {
+  deleteStream (options) {
     var args = []
     options = options || {}
     options.command = 'delete'
@@ -328,7 +382,7 @@ Subkey-Usage: encrypt
     return p.stdout
   }
 
-  _list (options) {
+  listStream (options) {
     var args = []
     options.command = 'list'
     if (options.secret) options.command = 'list-secret'
@@ -343,7 +397,7 @@ Subkey-Usage: encrypt
       }))
   }
 
-  _sign (options) {
+  signStream (options) {
     var args = []
     options.command = 'sign'
     setCommandArgs(options, args)
@@ -351,23 +405,44 @@ Subkey-Usage: encrypt
       .streamify(options.stdin)
   }
 
-  _verify (options) {
+  verifyStream (options) {
     var args = []
     options.command = 'verify'
     setCommandArgs(options, args)
-    return this._gpg(args).streamify(options.stdin)
+    var p = this._gpg(args)
+    if (options.stdin) {
+      try {
+        options.stdin.pipe(p.stdin)
+      } catch (e) {
+        if (e instanceof TypeError) p.stdin.end(options.stdin)
+      }
+    }
+    p.stdout.setEncoding('utf-8')
+    p.stderr.setEncoding('utf-8')
+    if (process.env.DEBUG && process.stderr) p.stderr.pipe(process.stderr)
+    return p.stdout.pipe(new Transform({
+      transform: verifySigReducer,
+      encoding: 'utf-8'
+    }))
   }
 
-  _encrypt (options) {
+  encryptStream (options) {
     var args = []
     options.command = 'encrypt'
     setCommandArgs(options, args)
     return this._gpg(args).streamify(options.stdin)
   }
 
-  _decrypt (options) {
+  decryptStream (options) {
     var args = []
     options.command = 'decrypt'
+    setCommandArgs(options, args)
+    return this._gpg(args).streamify(options.stdin)
+  }
+
+  editKeyStream (options) {
+    var args = []
+    options.command = 'edit-key'
     setCommandArgs(options, args)
     return this._gpg(args).streamify(options.stdin)
   }
@@ -378,7 +453,7 @@ Subkey-Usage: encrypt
   async generate (options) {
     return new Promise(async (resolve, reject) => {
       var keyid
-      var s = this._generate(options)
+      var s = this.generateStream(options)
       s.setEncoding('utf-8')
       s.on('data', d => {
         keyid = d
@@ -386,16 +461,17 @@ Subkey-Usage: encrypt
       s.on('error', e => {
         reject(e)
       })
-      s.on('finish', () => {
-        if (keyid) resolve(keyid)
-        else (reject(new Error('no key id for supposedly generated key')))
+      s.on('finish', (e) => {
+        if (e) reject(e)
+        else if (keyid) resolve(keyid)
+        else reject(new Error('no key id for supposedly generated key'))
       })
     })
   }
 
   async delete (options) {
     return new Promise(async (resolve, reject) => {
-      var s = this._delete(options)
+      var s = this.deleteStream(options)
       s.setEncoding('utf-8')
       s.on('data', d => {
         // DEBUG
@@ -420,7 +496,7 @@ Subkey-Usage: encrypt
     var keys = {}
     var found = false
     return new Promise(async (resolve, reject) => {
-      var s = this._list(options)
+      var s = this.listStream(options)
       s.setEncoding('utf-8')
       s.on('data', d => {
         if (d && d.split) {
@@ -514,12 +590,7 @@ Subkey-Usage: encrypt
     })
   }
 
-  async verify (options) {
-    var args = []
-    options.command = 'verify'
-    setCommandArgs(options, args)
-    var results = this._gpg(args).promisify(options.stdin)
-
+  /*
     if (typeof signers === 'string') signers = [signers]
     if (!weights || weights.length === 0) {
       weights = []
@@ -528,7 +599,7 @@ Subkey-Usage: encrypt
       })
     }
     if (typeof signature === 'undefined' || typeof message === 'undefined') throw new Error(`message and/or signature are blank`)
-    var rnd = await getRandStr(8)
+    var rnd = await randStr(8)
     var tmpfile = path.join(tmpdir(), `${Date.now()}${rnd}.sig`)
     await fs.writeFile(tmpfile, signature)
     var res = await spawn('gpg2', message, ['--status-fd=1', '--verify', tmpfile, '-'], true)
@@ -564,6 +635,31 @@ Subkey-Usage: encrypt
     }
     await fs.unlink(tmpfile).catch(e => {})
     return votes
+  */
+
+  async verify (options) {
+    var sigs = []
+    var s = this.verifyStream(options)
+    return new Promise((resolve, reject) => {
+      s.setEncoding('utf-8')
+      s.on('data', d => {
+        var da = d.split(' ')
+        sigs.push({
+          'sigkey': da[0],
+          'key': da[1],
+          'time': parseInt(da[2]),
+          'trust': parseInt(da[3]),
+          'uid': da.slice(4).join(' ')
+        })
+      })
+      s.on('error', e => {
+        reject(e)
+      })
+      s.on('end', e => {
+        if (e) reject(e)
+        resolve(sigs)
+      })
+    })
   }
 
   async sign (options) {
@@ -585,6 +681,28 @@ Subkey-Usage: encrypt
   async decrypt (options) {
     var args = []
     options.command = 'decrypt'
+    setCommandArgs(options, args)
+    return this._gpg(args).promisify(options.stdin)
+  }
+
+  async editKey (options) {
+    var args = []
+    options.command = 'edit-key'
+    setCommandArgs(options, args)
+    return new Promise((resolve, reject) => {
+      var s = this._gpg(args, { stdio: ['pipe', 'pipe', 'ignore'] })
+      options.stdin.pipe(s.stdin)
+      s.stdout.setEncoding('utf-8')
+      //s.stderr.setEncoding('utf-8')
+      s.stdout.on('end', e => {
+        resolve()
+      })
+    })
+  }
+
+  async signKey (options) {
+    var args = []
+    options.command = 'sign-key'
     setCommandArgs(options, args)
     return this._gpg(args).promisify(options.stdin)
   }
