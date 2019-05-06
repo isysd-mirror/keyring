@@ -254,10 +254,7 @@ export class GnuPGKeyring extends config.createGnuPGConfig(Keyring) {
       var keygen = await this.getConfig('keygen.conf').catch(e => config.DEFAULTS['keygen.conf'])
       options['Key-Type'] = options['Key-Type'] || keygen['Key-Type'].args[keygen['Key-Type'].args.length - 1]
 
-      // default creation time is random time in last ~1 day
-      options['Creation-Date'] = options['Creation-Date'] || 'seconds=' + (await randTimestamp()).toString()
-      // default expiration 10 years in the future
-      options['Expire-Date'] = options['Expire-Date'] || parseInt(options['Creation-Date'].slice(7)) + 315360000
+      // detect key type
       if (keygen && keygen['Key-Type']) assert(keygen['Key-Type'].args.indexOf(options['Key-Type']) !== -1)
 
       switch (options['Key-Type'].toLowerCase()) {
@@ -265,30 +262,59 @@ export class GnuPGKeyring extends config.createGnuPGConfig(Keyring) {
           options['Key-Length'] = options['Key-Length'] || keygen['Key-Length'].args[keygen['Key-Length'].args.length - 1]
           options.stdin.write(`Key-Type: RSA
 Key-Length: ${options['Key-Length']}
-Subkey-Type: RSA
-Subkey-Length: ${options['Key-Length']}
 `)
         case 'ecc':
         case 'eddsa':
         case 'ecdh':
         default:
           options['Key-Curve'] = options['Key-Curve'] || keygen['Key-Curve'].args[keygen['Key-Curve'].args.length - 1]
-          options['Subkey-Curve'] = options['Key-Curve'] === 'Ed25519' ? 'Curve25519' : options['Key-Curve']
           options.stdin.write(`Key-Type: eddsa
 Key-Curve: ${options['Key-Curve']}
 Key-Usage: sign
-Subkey-Type: ecdh
-Subkey-Curve: ${options['Subkey-Curve']}
-Subkey-Usage: encrypt
 `)
           break
       }
+
+      // detect subkey-type (currently only supported)
+      // TODO permit subkey array
+      options['Subkeys'] = options['Subkeys'] || [{'Subkey-Type': 'ecdh'}]
+      options['Subkeys'].forEach(sk => {
+        options['Subkey-Type'] = sk['Subkey-Type'] || options['Subkey-Type'] || options['Key-Type']
+        switch (options['Subkey-Type'].toLowerCase()) {
+          case 'rsa':
+            options['Subkey-Length'] = sk['Subkey-Length'] || options['Subkey-Length'] || keygen['Key-Length'].args[keygen['Key-Length'].args.length - 1]
+            options.stdin.write(`Subkey-Type: RSA
+Subkey-Length: ${options['Subkey-Length']}
+`)
+            break
+          case 'ecc':
+          case 'eddsa':
+          case 'ecdh':
+          default:
+            options['Subkey-Curve'] = options['Subkey-Curve'] === 'Ed25519' ? 'Curve25519' : options['Key-Curve']
+            options.stdin.write(`Subkey-Type: ecdh
+Subkey-Curve: ${options['Subkey-Curve']}
+`)
+            break
+        }
+        sk['Subkey-Usage'] = sk['Subkey-Usage'] || 'encrypt'
+        options.stdin.write(`Subkey-Usage: ${sk['Subkey-Usage']}
+`)
+      })
+
+      // default creation time is random time in last ~1 day
+      options['Creation-Date'] = options['Creation-Date'] || 'seconds=' + (await randTimestamp()).toString()
+      if (options['Creation-Date']) {
+        options.stdin.write(`Creation-Date: ${options['Creation-Date']}
+`)
+      }
+
       if (options['Expire-Date']) {
         options.stdin.write(`Expire-Date: ${options['Expire-Date']}
 `)
-      }
-      if (options['Creation-Date']) {
-        options.stdin.write(`Creation-Date: ${options['Creation-Date']}
+      } else if (options['Creation-Date']) {
+        // default expiration 10 years in the future
+        options.stdin.write(`Expire-Date: seconds=${parseInt(options['Creation-Date'].slice(8)) + 315360000}
 `)
       }
       options['Name-Real'] = options['Name-Real'] || process.env.USER

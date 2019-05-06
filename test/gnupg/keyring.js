@@ -136,8 +136,8 @@ new Promise(async (resolve, reject) => {
 
   keyid2 = await keyring.generate({
     'transient-key': true, // Do not use this option outside of unit tests!
-    'Real-Name': 'test2',
-    'Real-Email': `test2@${hostname()}`
+    'Name-Real': 'test2',
+    'Name-Email': `test2@${hostname()}`
   })
   keyuid2 = await keyring.list({ keys: keyid2 })
   fpr2 = Object.keys(keyuid2)[0]
@@ -155,8 +155,8 @@ quit
 
   keyid3 = await keyring.generate({
     'transient-key': true, // Do not use this option outside of unit tests!
-    'Real-Name': 'test3',
-    'Real-Email': `test3@${hostname()}`
+    'Name-Real': 'test3',
+    'Name-Email': `test3@${hostname()}`
   })
   keyuid3 = await keyring.list({ keys: keyid3 })
   fpr3 = Object.keys(keyuid3)[0]
@@ -173,8 +173,8 @@ quit
 
   keyid4 = await keyring.generate({
     'transient-key': true, // Do not use this option outside of unit tests!
-    'Real-Name': 'test4',
-    'Real-Email': `test4@${hostname()}`
+    'Name-Real': 'test4',
+    'Name-Email': `test4@${hostname()}`
   })
   keyuid4 = await keyring.list({ keys: keyid4 })
   fpr4 = Object.keys(keyuid4)[0]
